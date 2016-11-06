@@ -1,0 +1,101 @@
+# Reproducible Research, Course Project #1
+===========================================
+
+## Loading & Processing Data
+
+I loaded the .csv file with the code as shown:
+
+```{r load}
+raw <- read.csv("activity.csv", colClasses = c("numeric", "character", "integer"))
+```
+
+This assumes the activity.csv file is on the local working directory.
+
+## Mean Total Number of Steps per Day
+
+The code below generates output showing the mean total number of steps taken per day.  Missing values in the dataset were ignored.
+
+```{r totalsteps}
+library(dplyr)
+daysumtot <- raw %>% filter(!is.na(steps)) %>% group_by(date) %>% summarize(steps = sum(steps, na.rm = TRUE)) 
+```
+
+This is a histogram showing the total number of steps taken each day.
+
+```{r histplot1}
+library(ggplot2)
+histdaytot <- ggplot(daysumtot, aes(x=steps)) + geom_histogram(fill = "blue", binwidth = 1000) + labs(title = "Histogram of Total Daily Steps", x = "Daily Steps", y = "Frequency")
+print(histdaytot)
+meandaytotal <- mean(daysumtot$steps, na.rm = TRUE)
+meddaytotal <- median(daysumtot$steps, na.rm = TRUE)
+```
+
+Mean of daily steps: `r meandaytotal`  
+Median of daily steps: `r meddaytotal`  
+
+## Average Daily Activity Pattern  
+
+The average daily activity pattern is shown in the time series plot below.  The interval is marked by the beginning of the time interval in which the steps occurred.
+```{r avgdailyplot}
+stepsmeanint <- raw %>% filter(!is.na(steps)) %>% group_by(interval) %>% summarize(steps = mean(steps, na.rm = TRUE))
+stepsint <- ggplot(stepsmeanint, aes(x=interval, y=steps)) + geom_line(col = "red") + labs(title = "Steps per Interval", x = "5-Minute Interval (Avg Across Days)", y = "Steps")
+print(stepsint) 
+intmax <- stepsmeanint[which.max(stepsmeanint$steps),"interval"]
+```
+
+Interval # `r intmax` contains the maximum number of steps.
+
+## Imputing missing values
+
+```{r missingval}
+missval <- colSums(is.na(raw))
+```
+
+The total number of missing values in each dataset column (steps, date, interval) is `r missval`.
+
+Missing values will be filled in by calculating the mean for that 5-minute interval across all days.  The code to do that is below.
+
+```{r imputeval}
+rawtot <- raw
+for (i in 1:nrow(rawtot)) {
+        if (is.na(rawtot$steps[i])) {
+                m <- match(rawtot$interval[i], stepsmeanint$interval)
+                rawtot$steps[i] <- stepsmeanint$steps[m]
+        } 
+}
+natest <- colSums(is.na(rawtot))    # post-test for NAs
+
+```
+
+After the code executes, the number of NAs in each column (steps, date, interval) is found to be `r natest` and the updated dataset is:
+
+```{r}
+head(rawtot)
+```
+
+A histogram is shown below, with imputed values in place of the missing ones.  We see from these values that there is not much difference.  The new mean and median are equal to each other and equal to the previous mean of the histogram with missing values.
+
+```{r newhist}
+daysumtot1 <- rawtot %>% filter(!is.na(steps)) %>% group_by(date) %>% summarize(steps = sum(steps, na.rm = TRUE))
+histdaytot1 <- ggplot(daysumtot1, aes(x=steps)) + geom_histogram(fill = "green", binwidth = 1000) + labs(title = "Histogram of Total Daily Steps (with imputed values)", x = "Daily Steps", y = "Frequency")
+print(histdaytot1)
+meandaytotal1 <- mean(daysumtot1$steps, na.rm = TRUE)
+meddaytotal1 <- median(daysumtot1$steps, na.rm = TRUE)
+```
+Updated mean daily total:   `r meandaytotal1`  
+Updated median daily total: `r meddaytotal1`
+
+## Differences in Activity Patterns, Weekdays vs. Weekends
+
+Weekdays show more activity in the morning hours between 8am and 10am than do weekends.  The volatility of activity is greater during the weekday than the weekend.  The code and time series, panel plots are shown below.
+
+```{r daytypes}
+rawtotwk <- rawtot %>% mutate(day= weekdays(as.Date(date)), daytype = ifelse(day %in% c("Saturday","Sunday"),"weekend","weekday"))
+rawtotwk$daytype <- as.factor(rawtotwk$daytype)
+
+stepsmeanint1 <- rawtotwk %>% filter(!is.na(steps)) %>% group_by(interval, daytype) %>% summarize(steps = mean(steps, na.rm = TRUE))
+
+stepsint1 <- ggplot(stepsmeanint1, aes(x=interval, y=steps)) + geom_line(col = "green") + labs(title = "Steps per Interval by Day Type (with imputed values)", x = "5-Minute Interval (Avg Across Days)", y = "Steps") + facet_grid(daytype~.)
+print(stepsint1)  
+```
+
